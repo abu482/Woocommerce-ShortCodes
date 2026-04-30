@@ -1,3 +1,0 @@
-[27-Apr-2026 13:56:01 UTC]  .../builder/core.php:5382  et_builder_get_google_fonts():
-An unkown error has occured while trying to retrieve the fonts from the Google Fonts API. Please ensure your Google API Key is valid and active.
-
