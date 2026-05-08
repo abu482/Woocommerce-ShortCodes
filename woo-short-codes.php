@@ -128,7 +128,7 @@ function wcsc_add_custom_fees($cart) {
 
         $total_discount = 0.0;
         for ($i = 1; $i < $num_units; $i++) {
-            $total_discount += min(50.0, $fee_units[$i]);
+            $total_discount += min(75.0, $fee_units[$i]);
         }
 
         if ($total_discount > 0) {
