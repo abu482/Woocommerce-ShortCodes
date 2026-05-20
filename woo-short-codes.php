@@ -155,3 +155,55 @@ function wcsc_add_custom_fees($cart) {
         $cart->add_fee('Additional Travel Fees', $amount, false);
     }
 }
+
+// ------------------------------------------------------------------
+// COUPON EXTENSION TO SERVICE FEES - Priority 999
+// WooCommerce coupons only apply to product subtotals, not fees.
+// If a fixed-cart coupon exceeds the product subtotal, the leftover
+// is applied here as a negative fee against collection fees.
+// ------------------------------------------------------------------
+add_action('woocommerce_cart_calculate_fees', 'wcsc_extend_coupons_to_service_fees', 999, 1);
+
+function wcsc_extend_coupons_to_service_fees($cart) {
+    if (is_admin() && !defined('DOING_AJAX')) return;
+    if (!$cart || $cart->is_empty()) return;
+
+    $applied_coupons = $cart->get_applied_coupons();
+    if (empty($applied_coupons)) return;
+
+    // Sum all service fees in the cart
+    $total_service_fee = 0.0;
+    foreach ($cart->get_cart() as $cart_item) {
+        $product_id = (int) $cart_item['product_id'];
+        $qty        = max(1, (int) $cart_item['quantity']);
+        $raw_fee    = get_post_meta($product_id, 'service_fee', true);
+        if ($raw_fee === '' || $raw_fee === false) continue;
+        $fee = (float) preg_replace('/[^0-9\.\-]/', '', (string) $raw_fee);
+        if ($fee <= 0) continue;
+        $total_service_fee += $fee * $qty;
+    }
+
+    if ($total_service_fee <= 0) return;
+
+    $cart_subtotal = (float) $cart->get_subtotal();
+
+    foreach ($applied_coupons as $code) {
+        $coupon = new WC_Coupon($code);
+        if ($coupon->get_discount_type() !== 'fixed_cart') continue;
+
+        $coupon_amount       = (float) $coupon->get_amount();
+        $applied_to_products = min($coupon_amount, $cart_subtotal);
+        $remaining           = $coupon_amount - $applied_to_products;
+
+        if ($remaining <= 0) continue;
+
+        $fee_discount       = min($remaining, $total_service_fee);
+        $total_service_fee -= $fee_discount; // prevent over-discounting with stacked coupons
+
+        $cart->add_fee(
+            sprintf('Collection Fee Discount – %s', strtoupper($code)),
+            -$fee_discount,
+            false
+        );
+    }
+}
