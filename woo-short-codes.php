@@ -157,6 +157,38 @@ function wcsc_add_custom_fees($cart) {
 }
 
 // ------------------------------------------------------------------
+// COUPON MINIMUM SPEND — INCLUDE SERVICE FEES
+// WooCommerce checks minimum spend against product subtotal only,
+// ignoring fees. This includes service fees in that check so coupons
+// with a minimum spend aren't incorrectly blocked.
+// ------------------------------------------------------------------
+add_filter('woocommerce_coupon_validate_minimum_amount', 'wcsc_validate_minimum_with_fees', 10, 2);
+
+function wcsc_validate_minimum_with_fees($is_invalid, $coupon) {
+    if (!$is_invalid) return $is_invalid;
+
+    $minimum = (float) $coupon->get_minimum_amount();
+    if ($minimum <= 0) return $is_invalid;
+
+    $cart = WC()->cart;
+    if (!$cart) return $is_invalid;
+
+    $cart_total = (float) $cart->get_subtotal();
+
+    foreach ($cart->get_cart() as $cart_item) {
+        $product_id = (int) $cart_item['product_id'];
+        $qty        = max(1, (int) $cart_item['quantity']);
+        $raw_fee    = get_post_meta($product_id, 'service_fee', true);
+        if ($raw_fee === '' || $raw_fee === false) continue;
+        $fee = (float) preg_replace('/[^0-9\.\-]/', '', (string) $raw_fee);
+        if ($fee <= 0) continue;
+        $cart_total += $fee * $qty;
+    }
+
+    return $cart_total < $minimum;
+}
+
+// ------------------------------------------------------------------
 // COUPON EXTENSION TO SERVICE FEES - Priority 999
 // WooCommerce coupons only apply to product subtotals, not fees.
 // If a fixed-cart coupon exceeds the product subtotal, the leftover
